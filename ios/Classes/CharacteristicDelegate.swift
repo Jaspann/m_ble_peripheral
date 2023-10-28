@@ -2,7 +2,7 @@ import CoreBluetooth
 
 class CharacteristicDelegate {
     // Store all created characteristics, using entityId as the key for retrieval
-    private static var characteristics: [String: KGattCharacteristic] = [:]
+    private static var characteristics: [String: CBMutableCharacteristic] = [:]
     private static var requests: [Int: CBATTRequest] = [:]
     private static var requestCounter: Int = 0
 
@@ -27,16 +27,16 @@ class CharacteristicDelegate {
         return request
     }
 
-    static func getEntityId(c: CBMutableCharacteristic) -> String? {
-        for (key, value) in characteristics {
-            if value.characteristic == c {
-                return key
+    static func getEntityIdFromUUID(uuid: CBUUID) -> String? {
+        for (identifier, characteristic) in characteristics {
+            if characteristic.uuid == uuid {
+                return identifier
             }
         }
         return nil
     }
 
-    static func getKChar(entityId: String) -> KGattCharacteristic {
+    static func getKChar(entityId: String) -> CBMutableCharacteristic {
         guard 
             let kChar = characteristics[entityId] 
         else {
@@ -45,7 +45,7 @@ class CharacteristicDelegate {
         return kChar
     }
 
-    static func createCharacteristic(uuid: String, properties: CBCharacteristicProperties, permissions: CBAttributePermissions, entityId: String) -> KGattCharacteristic {
+    static func createCharacteristic(uuid: String, properties: CBCharacteristicProperties, permissions: CBAttributePermissions, entityId: String) -> CBMutableCharacteristic {
         let characteristic = CBMutableCharacteristic(
             type: CBUUID(string: uuid),
             properties: properties,
@@ -53,9 +53,8 @@ class CharacteristicDelegate {
             permissions: permissions
         )
 
-        let kChar = KGattCharacteristic(entityId: entityId, characteristic: characteristic)
-        characteristics[entityId] = kChar
-        return kChar
+        characteristics[entityId] = characteristic
+        return characteristic
     }
 }
 

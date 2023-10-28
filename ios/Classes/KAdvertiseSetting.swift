@@ -7,10 +7,13 @@ class KAdvertiseSetting {
         setByMap(settingMap: settingMap)
     }
     
-    func toAdvertiseSetting() -> [String: Any] {
-        return [
-            CBAdvertisementDataLocalNameKey: name ?? ""
-        ]
+    func toAdvertiseSetting() -> [String: String] {
+        
+        if let name = name {
+                    return [CBAdvertisementDataLocalNameKey: name]
+                } else {
+                    return [:]
+                }
     }
     
     func setByMap(settingMap: [String: Any]) {

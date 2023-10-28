@@ -9,8 +9,8 @@ class KGattDevice {
     address = map["address"] as String;
     name = map["name"] as String?;
     alias = map["alias"] as String?;
-    bondState = map["bondState"] as int;
-    type = map["type"] as int;
+    bondState = map["bondState"] as int?;
+    type = map["type"] as int?;
   }
 
   @override

@@ -1,10 +1,13 @@
 import CoreBluetooth
 import Flutter
+import os
 
 class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDelegate, FlutterStreamHandler {
     
     private var peripheralManager: CBPeripheralManager?
     private var eventSink: FlutterEventSink?
+    
+    private var devices: [UUID: CBCentral] = [:]
     
     override init() {
         super.init()
@@ -12,6 +15,26 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
     }
 
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
+    }
+    
+    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo: CBCharacteristic) {
+        
+        let address = central.identifier
+        
+        guard let entityId = CharacteristicDelegate.getEntityIdFromUUID(uuid: didSubscribeTo.uuid) else {
+            return
+        }
+        
+        devices[address] = central
+        
+        let notificationSubscription: [String: Any] = [
+            "event": "NotificationStateChange",
+            "entityId": entityId,
+            "device": ["address": address.uuidString],
+            "enabled": true
+        ]
+        
+        eventSink!(notificationSubscription)
     }
 
     func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -27,10 +50,10 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
     static func register(with registrar: FlutterPluginRegistrar) {
         let instance = PeripheralManagerHandler()
         
-        //         let gattChannel = FlutterMethodChannel(name: "m:kbp/gatt", binaryMessenger: registrar.messenger())
+        let gattChannel = FlutterMethodChannel(name: "m:kbp/gatt", binaryMessenger: registrar.messenger())
         let advertisingChannel = FlutterMethodChannel(name: "m:kbp/advertising", binaryMessenger: registrar.messenger())
         
-        //         registrar.addMethodCallDelegate(instance, channel: gattChannel)
+        registrar.addMethodCallDelegate(instance, channel: gattChannel)
         registrar.addMethodCallDelegate(instance, channel: advertisingChannel)
         
         let eventChannel = FlutterEventChannel(name: "e:kbp/gatt", binaryMessenger: registrar.messenger())
@@ -40,10 +63,17 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
         let requestNumber = CharacteristicDelegate.addRequest(request: request)
         
+        guard let entityId = CharacteristicDelegate.getEntityIdFromUUID(uuid: request.characteristic.uuid) else {return}
+        
+        let deviceAddress = request.central.identifier.uuidString
+        
         let readRequestEvent: [String: Any] = [
             "event": "CharacteristicReadRequest",
             "requestId": requestNumber,
-            "entityId": String(request.hash),
+            "entityId": entityId,
+            "offset": request.offset,
+            "device": ["address": deviceAddress]
+            
         ]
         
         eventSink!(readRequestEvent)
@@ -54,17 +84,19 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
         for request in requests {
             let requestNumber = CharacteristicDelegate.addRequest(request: request)
             
-            var readRequestEvent: [String: Any] = [
+            guard let entityId = CharacteristicDelegate.getEntityIdFromUUID(uuid: request.characteristic.uuid) else {return}
+            
+            var writeRequestEvent: [String: Any] = [
                 "event": "CharacteristicWriteRequest",
                 "requestId": requestNumber,
-                "entityId": String(request.hash),
+                "entityId": entityId,
             ]
             
             if(request.value != nil) {
-                readRequestEvent["value"] = FlutterStandardTypedData(bytes: request.value!)
+                writeRequestEvent["value"] = FlutterStandardTypedData(bytes: request.value!)
             }
             
-            eventSink!(readRequestEvent)
+            eventSink!(writeRequestEvent)
         }
     }
     
@@ -122,7 +154,7 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
                 return
             }
             
-            guard var request = CharacteristicDelegate.popRequest(requestNumber: requestId)
+            guard let request = CharacteristicDelegate.popRequest(requestNumber: requestId)
             else {
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "No Request of ID found", details: nil))
                 return
@@ -136,17 +168,21 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
         case "char/notify":
             guard let args = call.arguments as? [String: Any],
                   let entityId = args["charEntityId"] as? String,
-                  let value = args["value"] as? [Int]
+                  let value = args["value"] as? [Int],
+                  let address = args["deviceAddress"] as? String,
+                  let uuid = UUID(uuidString: address),
+                  let central = devices[uuid]
             else {
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
                 return
             }
             
+            
             let characteristic = CharacteristicDelegate.getKChar(entityId: entityId)
             
             let dataValue = Data((value).map { UInt8($0) })
             
-            peripheralManager?.updateValue(dataValue, for: characteristic.characteristic, onSubscribedCentrals: nil)
+            peripheralManager?.updateValue(dataValue, for: characteristic, onSubscribedCentrals: [central])
             
             result(nil)
             
@@ -160,7 +196,7 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
                 return
             }
             
-            let characteristics = characteristicsData.compactMap { charDict -> KGattCharacteristic? in
+            let characteristics = characteristicsData.compactMap { charDict -> CBMutableCharacteristic? in
                 guard let charUuid = charDict["uuid"] as? String,
                       let charPropertiesList = charDict["properties"] as? Int,
                       let charPermissionsList = charDict["permissions"] as? Int,
@@ -205,10 +241,12 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
     
     private func startAdvertising(id: String, advertiseSetting: KAdvertiseSetting, advertiseData: KAdvertiseData, result: @escaping FlutterResult) {
         
-        let services: [CBUUID] = advertiseData.serviceData
+        var advertisement: [String : Any] = [:]
         
-        var advertisement: [String : Any] = [CBAdvertisementDataServiceUUIDsKey: services]
-        
+        if !advertiseData.serviceData.isEmpty {
+            advertisement[CBAdvertisementDataServiceUUIDsKey] = advertiseData.serviceData
+        }
+
         if let name: String = advertiseSetting.name {
             advertisement[CBAdvertisementDataLocalNameKey] = name
         }
@@ -224,23 +262,18 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
         peripheralManager?.stopAdvertising()
     }
     
-    private func setServiceState(entityId: String, state: Bool) {
-        
-    }
-    
     private func activateService(entityId: String) {
-        guard let kService = GattServiceDelegate.services[entityId] else {
+        guard let service = GattServiceDelegate.services[entityId] else {
             fatalError("Not Found Gatt Service, may be the entityId is wrong.")
         }
-        peripheralManager?.add(kService.service)
-        GattServiceDelegate.setServiceState(entityId: entityId, state: true)
+        
+        peripheralManager?.add(service)
     }
     
     private func inactivateService(entityId: String) {
-        guard let kService = GattServiceDelegate.services[entityId] else {
+        guard let service = GattServiceDelegate.services[entityId] else {
             fatalError("Not Found Gatt Service, may be the entityId is wrong.")
         }
-        peripheralManager?.remove(kService.service)
-        GattServiceDelegate.setServiceState(entityId: entityId, state: false)
+        peripheralManager?.remove(service)
     }
 }
