@@ -106,7 +106,7 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
             guard let args = call.arguments as? [String: Any],
                   let id = args["Id"] as? String,
                   let kAdvertiseSettingList = args["AdvertiseSetting"] as? [String: Any],
-                  let kAdvertiseDataList = args["AdvertiseData"] as? [String: Any]
+                  let kAdvertiseDataList = args["ScanResponseData"] as? [String: Any]
                     
             else {
                 result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))

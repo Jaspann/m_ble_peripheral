@@ -127,6 +127,7 @@ class _NewAdvertiseDialogState extends State<NewAdvertiseDialog> {
                     final advertising = KAdvertising(
                       setting: advertisingSetting,
                       data: advertisingData,
+                      scanResponseData: advertisingData,
                     );
                     await advertising.start();
                     Navigator.pop(context);
