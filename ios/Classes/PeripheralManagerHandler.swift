@@ -7,6 +7,10 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
     private var peripheralManager: CBPeripheralManager?
     private var eventSink: FlutterEventSink?
     
+    private var notificaitonDataQueue: [Data] = []
+    private var notificaitonCharacteristicQueue: [CBMutableCharacteristic] = []
+    private var notificaitonCentralQueue: [CBCentral] = []
+    
     private var devices: [UUID: CBCentral] = [:]
     
     override init() {
@@ -55,6 +59,33 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
         ]
         
         eventSink!(notificationSubscription)
+    }
+    
+    func peripheralManagerIsReady(toUpdateSubscribers: CBPeripheralManager) {
+        
+        //This function is only activated when updateValue() fails, so keep looping until it does or the queue is emptied
+        while !notificaitonDataQueue.isEmpty
+        {
+            let dataValue = notificaitonDataQueue.removeFirst()
+            let characteristic = notificaitonCharacteristicQueue.removeFirst()
+            let central = notificaitonCentralQueue.removeFirst()
+            
+            var sent = peripheralManager?.updateValue(dataValue, for: characteristic, onSubscribedCentrals: [central])
+            
+            // Convert Bool? to Bool
+            guard let checkedSent = sent else {
+                return
+            }
+            
+            // If the message did not send
+            if !checkedSent {
+                notificaitonDataQueue.insert(dataValue, at: 0)
+                notificaitonCharacteristicQueue.insert(characteristic, at: 0)
+                notificaitonCentralQueue.insert(central, at: 0)
+                break
+            }
+        }
+        
     }
 
     func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -198,7 +229,31 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
             
             let dataValue = Data((value).map { UInt8($0) })
             
-            peripheralManager?.updateValue(dataValue, for: characteristic, onSubscribedCentrals: [central])
+            if !notificaitonDataQueue.isEmpty {
+                notificaitonDataQueue.append(dataValue)
+                notificaitonCharacteristicQueue.append(characteristic)
+                notificaitonCentralQueue.append(central)
+                result(nil)
+                return
+            }
+            
+            else
+            {
+                var sent = peripheralManager?.updateValue(dataValue, for: characteristic, onSubscribedCentrals: [central])
+                
+                // Convert Bool? to Bool
+                guard let checkedSent = sent else {
+                    result(nil)
+                    return
+                }
+                
+                // If the message did not send
+                if !checkedSent {
+                    notificaitonDataQueue.append(dataValue)
+                    notificaitonCharacteristicQueue.append(characteristic)
+                    notificaitonCentralQueue.append(central)
+                }
+            }
             
             result(nil)
             
