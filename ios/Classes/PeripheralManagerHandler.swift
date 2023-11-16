@@ -36,6 +36,26 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
         
         eventSink!(notificationSubscription)
     }
+    
+    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom: CBCharacteristic) {
+        
+        let address = central.identifier
+        
+        guard let entityId = CharacteristicDelegate.getEntityIdFromUUID(uuid: didUnsubscribeFrom.uuid) else {
+            return
+        }
+        
+        devices.removeValue(forKey: address)
+        
+        let notificationSubscription: [String: Any] = [
+            "event": "NotificationStateChange",
+            "entityId": entityId,
+            "device": ["address": address.uuidString],
+            "enabled": false
+        ]
+        
+        eventSink!(notificationSubscription)
+    }
 
     func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
         eventSink = events
