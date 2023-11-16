@@ -120,12 +120,8 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
             result(nil)
             
         case "stopAdvertising":
-            guard let id = call.arguments as? String else {
-                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
-                return
-            }
             
-            stopAdvertising(id, result: result)
+            stopAdvertising()
             result(nil)
         case "char/create":
             
@@ -255,10 +251,7 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
         
     }
     
-    private func stopAdvertising(_ id: String, result: @escaping FlutterResult) {
-        // Stop advertising for the given ID
-        
-        // Example: Stop advertising
+    private func stopAdvertising() {
         peripheralManager?.stopAdvertising()
     }
     
