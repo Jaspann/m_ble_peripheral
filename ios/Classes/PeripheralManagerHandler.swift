@@ -196,13 +196,9 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
             
             let characteristic = CharacteristicDelegate.getKChar(entityId: entityId)
             
-            let dataArray = value.map { intValue in
-                withUnsafeBytes(of: intValue) { Data($0) }
-            }
+            let dataValue = Data((value).map { UInt8($0) })
             
-            for data in dataArray {
-                peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central])
-            }
+            peripheralManager?.updateValue(dataValue, for: characteristic, onSubscribedCentrals: [central])
             
             result(nil)
             
