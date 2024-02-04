@@ -1,7 +1,7 @@
 name: m_ble_peripheral
 description: A modified version of k_ble_peripheral with ios support.
 version: 0.0.1
-homepage:
+homepage: https://github.com/Jaspann/m_ble_peripheral
 
 environment:
   sdk: ">=3.1.4 <4.0.0"
