@@ -49,6 +49,8 @@ class PeripheralManagerHandler: NSObject, FlutterPlugin, CBPeripheralManagerDele
             return
         }
         
+        peripheral.setDesiredConnectionLatency(.low, for: central)
+        
         devices.removeValue(forKey: address)
         
         let notificationSubscription: [String: Any] = [
