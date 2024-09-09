@@ -1,6 +1,7 @@
 package com.freemovevr.m_ble_peripheral
 
 import android.bluetooth.*
+import android.bluetooth.BluetoothGatt.CONNECTION_PRIORITY_HIGH
 import android.bluetooth.BluetoothProfile.STATE_CONNECTED
 import android.content.Context
 import android.os.Build
@@ -21,10 +22,13 @@ class GattHandler(context: Context) : MethodCallHandler {
     var eventSink: EventSink? = null
     private val uiThreadHandler: Handler = Handler(Looper.getMainLooper())
 
+    private val gattCallback = GattCallback()
+
     private val serverCallback = object : BluetoothGattServerCallback() {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             Log.d("MBlePeripheralPlugin", "onConnectionStateChange")
             if (newState == STATE_CONNECTED) {
+                device.connectGatt(context, true, gattCallback).requestConnectionPriority(CONNECTION_PRIORITY_HIGH)
                 DeviceDelegate.newDevice(device)
             }
             // send event to flutter
